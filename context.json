@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "vault_name": "Neural Vault",
+  "last_updated": "2026-04-27T16:15:00Z",
+  "endpoint": "https://seu-projeto.vercel.app/context.json",
+  "context": {
+    "instructions": "Contexto do meu Second Brain. Use para responder com base no meu conhecimento.",
+    "projects": [],
+    "ideas": [],
+    "knowledge_base": [],
+    "attachments": []
+  },
+  "metadata": {
+    "total_notes": 0,
+    "total_tags": 0
+  }
+}
