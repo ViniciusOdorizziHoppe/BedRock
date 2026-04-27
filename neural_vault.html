@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Vault — Second Brain OS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border-color: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #58a6ff;
+            --accent-hover: #79c0ff;
+            --success: #238636;
+            --warning: #e3b341;
+            --danger: #da3633;
+        }
+
+        * { scrollbar-width: thin; scrollbar-color: var(--bg-tertiary) var(--bg-primary); }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--border-color); }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        .glass {
+            background: rgba(22, 27, 34, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+        }
+
+        .node-circle {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .node-circle:hover {
+            filter: brightness(1.3);
+            transform: scale(1.1);
+        }
+
+        .link-line {
+            stroke: var(--border-color);
+            stroke-opacity: 0.6;
+            stroke-width: 1.5px;
+        }
+
+        .editor-textarea {
+            background: transparent;
+            color: var(--text-primary);
+            border: none;
+            outline: none;
+            resize: none;
+            font-family: 'JetBrains Mono', monospace;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        .file-item {
+            transition: all 0.15s ease;
+        }
+        .file-item:hover {
+            background: var(--bg-tertiary);
+        }
+        .file-item.active {
+            background: rgba(88, 166, 255, 0.15);
+            border-left: 2px solid var(--accent);
+        }
+
+        .tag-pill {
+            background: rgba(88, 166, 255, 0.15);
+            color: var(--accent);
+            border: 1px solid rgba(88, 166, 255, 0.3);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #0d1117;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--border-color);
+            transition: all 0.3s;
+        }
+        .drop-zone.dragover {
+            border-color: var(--accent);
+            background: rgba(88, 166, 255, 0.1);
+        }
+
+        .preview-markdown h1 { font-size: 1.8em; font-weight: 700; margin: 0.8em 0 0.4em; color: var(--text-primary); }
+        .preview-markdown h2 { font-size: 1.5em; font-weight: 600; margin: 0.7em 0 0.35em; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 0.2em; }
+        .preview-markdown h3 { font-size: 1.25em; font-weight: 600; margin: 0.6em 0 0.3em; color: var(--text-primary); }
+        .preview-markdown p { margin: 0.5em 0; line-height: 1.7; color: var(--text-secondary); }
+        .preview-markdown code { background: var(--bg-tertiary); padding: 0.2em 0.4em; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
+        .preview-markdown pre { background: var(--bg-tertiary); padding: 1em; border-radius: 8px; overflow-x: auto; border: 1px solid var(--border-color); }
+        .preview-markdown blockquote { border-left: 3px solid var(--accent); padding-left: 1em; margin: 0.5em 0; color: var(--text-secondary); font-style: italic; }
+        .preview-markdown ul, .preview-markdown ol { margin: 0.5em 0; padding-left: 1.5em; }
+        .preview-markdown li { margin: 0.2em 0; }
+        .preview-markdown a { color: var(--accent); text-decoration: none; }
+        .preview-markdown a:hover { text-decoration: underline; }
+        .preview-markdown table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+        .preview-markdown th, .preview-markdown td { border: 1px solid var(--border-color); padding: 0.5em; text-align: left; }
+        .preview-markdown th { background: var(--bg-tertiary); font-weight: 600; }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 5px rgba(88, 166, 255, 0.3); }
+            50% { box-shadow: 0 0 20px rgba(88, 166, 255, 0.6); }
+        }
+        .ai-active { animation: pulse-glow 2s infinite; }
+
+        .toast {
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+        .toast.show { transform: translateX(0); }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col">
+    <!-- Header -->
+    <header class="h-12 glass flex items-center justify-between px-4 z-50">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+            </div>
+            <span class="font-bold text-lg tracking-tight">Neural Vault</span>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-green-900/30 text-green-400 border border-green-800">v2.0</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button onclick="app.toggleView('editor')" class="px-3 py-1.5 rounded-md text-sm hover:bg-white/5 transition flex items-center gap-2" id="btn-editor">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                Editor
+            </button>
+            <button onclick="app.toggleView('graph')" class="px-3 py-1.5 rounded-md text-sm hover:bg-white/5 transition flex items-center gap-2" id="btn-graph">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Graph
+            </button>
+            <button onclick="app.toggleView('integrations')" class="px-3 py-1.5 rounded-md text-sm hover:bg-white/5 transition flex items-center gap-2" id="btn-integrations">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/></svg>
+                Integrações
+            </button>
+            <button onclick="app.toggleView('ai-context')" class="px-3 py-1.5 rounded-md text-sm hover:bg-white/5 transition flex items-center gap-2 ai-active" id="btn-ai">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+                IA Context
+            </button>
+            <div class="w-px h-6 bg-white/10 mx-1"></div>
+            <button onclick="app.exportAll()" class="px-3 py-1.5 rounded-md text-sm bg-white/5 hover:bg-white/10 transition flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                Exportar
+            </button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-64 glass flex flex-col border-r border-white/5">
+            <div class="p-3 border-b border-white/5">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-white/40 uppercase tracking-wider">Explorer</span>
+                    <div class="flex gap-1">
+                        <button onclick="app.createFile()" class="p-1 rounded hover:bg-white/10" title="Novo arquivo">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        </button>
+                        <button onclick="app.createFolder()" class="p-1 rounded hover:bg-white/10" title="Nova pasta">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                        </button>
+                        <button onclick="document.getElementById('fileInput').click()" class="p-1 rounded hover:bg-white/10" title="Upload">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <input type="text" id="searchFiles" placeholder="Buscar arquivos..." class="w-full bg-black/20 border border-white/10 rounded-md px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none transition" oninput="app.searchFiles(this.value)">
+            </div>
+            <div id="fileTree" class="flex-1 overflow-y-auto p-2"></div>
+            <div class="p-3 border-t border-white/5">
+                <div class="text-xs text-white/30 mb-1">Storage</div>
+                <div class="w-full bg-white/5 rounded-full h-1.5 mb-1">
+                    <div class="bg-blue-500 h-1.5 rounded-full transition-all" style="width: 0%" id="storageBar"></div>
+                </div>
+                <div class="text-xs text-white/40" id="storageText">0 KB / ∞</div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col relative overflow-hidden">
+            <!-- Editor View -->
+            <div id="view-editor" class="flex-1 flex">
+                <div class="flex-1 flex flex-col">
+                    <div class="h-10 border-b border-white/5 flex items-center px-4 justify-between bg-black/20">
+                        <div class="flex items-center gap-2 text-sm text-white/60">
+                            <span id="currentPath">Nenhum arquivo selecionado</span>
+                            <span id="unsavedIndicator" class="hidden text-yellow-500">•</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="app.toggleSplit()" class="p-1.5 rounded hover:bg-white/10" title="Split view">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
+                            </button>
+                            <button onclick="app.saveCurrent()" class="px-3 py-1 rounded-md text-xs btn-primary">Salvar (Ctrl+S)</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 flex" id="editorContainer">
+                        <textarea id="editor" class="editor-textarea flex-1 p-6" placeholder="# Comece a escrever...
+
+Use [[links]] para conectar notas.
+Use #tags para organizar.
+
+---" oninput="app.onEditorChange()"></textarea>
+                        <div id="preview" class="hidden flex-1 p-6 overflow-y-auto preview-markdown border-l border-white/5"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Graph View -->
+            <div id="view-graph" class="hidden flex-1 relative">
+                <div class="absolute top-4 left-4 z-10 glass rounded-lg p-3 max-w-xs">
+                    <h3 class="font-semibold mb-2 text-sm">Graph View</h3>
+                    <div class="text-xs text-white/50 mb-2">Visualize as conexões entre suas notas</div>
+                    <div class="flex gap-2 flex-wrap">
+                        <span class="text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-400">Notas</span>
+                        <span class="text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-400">Tags</span>
+                        <span class="text-xs px-2 py-1 rounded bg-green-500/20 text-green-400">Arquivos</span>
+                    </div>
+                </div>
+                <svg id="graphSvg" class="w-full h-full"></svg>
+            </div>
+
+            <!-- Integrations View -->
+            <div id="view-integrations" class="hidden flex-1 overflow-y-auto p-8">
+                <div class="max-w-4xl mx-auto">
+                    <h2 class="text-2xl font-bold mb-6">Integrações</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- GitHub -->
+                        <div class="glass rounded-xl p-6 hover:border-blue-500/50 transition cursor-pointer" onclick="app.connectGitHub()">
+                            <div class="flex items-start justify-between mb-4">
+                                <div class="w-12 h-12 rounded-lg bg-gray-800 flex items-center justify-center">
+                                    <svg class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                                </div>
+                                <span class="px-2 py-1 rounded text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">Configurar</span>
+                            </div>
+                            <h3 class="font-semibold text-lg mb-1">GitHub</h3>
+                            <p class="text-sm text-white/50">Sincronize repositórios, issues e PRs. Importe READMEs e documentação automaticamente.</p>
+                        </div>
+
+                        <!-- Google Drive -->
+                        <div class="glass rounded-xl p-6 hover:border-blue-500/50 transition cursor-pointer" onclick="app.connectDrive()">
+                            <div class="flex items-start justify-between mb-4">
+                                <div class="w-12 h-12 rounded-lg bg-blue-900/30 flex items-center justify-center">
+                                    <svg class="w-7 h-7 text-blue-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12.01 1.485c-2.082 0-3.754.02-3.743.047.01.02 1.708 3.001 3.774 6.62l3.76 6.574h3.76c2.081 0 3.753-.02 3.742-.047-.005-.02-1.708-3.001-3.775-6.62l-3.76-6.574h-3.758zm-4.76 1.73a789.828 789.828 0 003.63 6.319H3.24l3.005-6.319zm9.52 0l3.006 6.319h-7.64l3.634-6.319zm-14.76 8.04h7.644l-3.634 6.318H3.01l3-6.318zm9.52 0l-3.005 6.318h7.64l-3.005-6.318zm-4.76 8.04l-3.634 6.318H3.01l3.005-6.318h3.755zm9.52 0l3.005 6.318h-3.755l-3.634-6.318h4.384z"/></svg>
+                                </div>
+                                <span class="px-2 py-1 rounded text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">Configurar</span>
+                            </div>
+                            <h3 class="font-semibold text-lg mb-1">Google Drive</h3>
+                            <p class="text-sm text-white/50">Importe documentos, planilhas e apresentações. Suporte a .docx, .xlsx, .pdf e mais.</p>
+                        </div>
+
+                        <!-- VS Code -->
+                        <div class="glass rounded-xl p-6 hover:border-blue-500/50 transition cursor-pointer" onclick="app.connectVSCode()">
+                            <div class="flex items-start justify-between mb-4">
+                                <div class="w-12 h-12 rounded-lg bg-blue-800/30 flex items-center justify-center">
+                                    <svg class="w-7 h-7 text-blue-400" fill="currentColor" viewBox="0 0 24 24"><path d="M17.583.063a1.5 1.5 0 011.342.823l.003.006 3.75 8.25a1.5 1.5 0 01-.134 1.522l-.003.004-6 8.25a1.5 1.5 0 01-2.185.255l-.006-.005-3.75-3a1.5 1.5 0 01-.469-1.623l.002-.007 1.5-4.5a1.5 1.5 0 011.415-1.012h.005l5.25.375a1.5 1.5 0 011.342.823l.003.006 3.75 8.25a1.5 1.5 0 01-.134 1.522l-.003.004-6 8.25a1.5 1.5 0 01-2.185.255l-.006-.005-3.75-3a1.5 1.5 0 01-.469-1.623l.002-.007 1.5-4.5a1.5 1.5 0 011.415-1.012h.005l5.25.375zM2.25 3.75a1.5 1.5 0 011.5-1.5h6a1.5 1.5 0 011.5 1.5v16.5a1.5 1.5 0 01-1.5 1.5h-6a1.5 1.5 0 01-1.5-1.5V3.75z"/></svg>
+                                </div>
+                                <span class="px-2 py-1 rounded text-xs bg-green-500/20 text-green-400 border border-green-500/30">Extensão</span>
+                            </div>
+                            <h3 class="font-semibold text-lg mb-1">VS Code</h3>
+                            <p class="text-sm text-white/50">Extensão para sincronizar snippets, settings.json e workspaces. Acesse notas direto do editor.</p>
+                        </div>
+
+                        <!-- API / Webhook -->
+                        <div class="glass rounded-xl p-6 hover:border-blue-500/50 transition cursor-pointer" onclick="app.showApiConfig()">
+                            <div class="flex items-start justify-between mb-4">
+                                <div class="w-12 h-12 rounded-lg bg-purple-900/30 flex items-center justify-center">
+                                    <svg class="w-7 h-7 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+                                </div>
+                                <span class="px-2 py-1 rounded text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30">API</span>
+                            </div>
+                            <h3 class="font-semibold text-lg mb-1">API & Webhooks</h3>
+                            <p class="text-sm text-white/50">REST API completa. Webhooks para automações. Endpoint MCP para qualquer LLM.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Context View -->
+            <div id="view-ai-context" class="hidden flex-1 overflow-y-auto p-8">
+                <div class="max-w-4xl mx-auto">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold">Contexto para IA</h2>
+                            <p class="text-white/50 text-sm mt-1">Endpoint público para qualquer LLM acessar seu conhecimento</p>
+                        </div>
+                        <button onclick="app.regenerateContext()" class="px-4 py-2 rounded-lg btn-primary text-sm flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            Regenerar Contexto
+                        </button>
+                    </div>
+
+                    <div class="glass rounded-xl p-6 mb-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-semibold">🔗 URL Pública de Acesso</h3>
+                            <span class="px-2 py-1 rounded text-xs bg-green-500/20 text-green-400 border border-green-500/30">Online</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" id="publicUrl" readonly class="flex-1 bg-black/30 border border-white/10 rounded-lg px-4 py-2 text-sm mono text-blue-400" value="https://neural-vault.app/api/v1/context">
+                            <button onclick="app.copyUrl()" class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition text-sm">Copiar</button>
+                        </div>
+                        <div class="mt-3 text-xs text-white/40">
+                            Qualquer LLM pode acessar este endpoint para obter contexto estruturado do seu vault.
+                        </div>
+                    </div>
+
+                    <div class="glass rounded-xl p-6 mb-6">
+                        <h3 class="font-semibold mb-4">📋 Formato MCP (Model Context Protocol)</h3>
+                        <pre class="bg-black/30 rounded-lg p-4 overflow-x-auto text-xs mono"><code id="mcpPreview">{
+  "schema_version": "1.0",
+  "vault_name": "Neural Vault",
+  "last_updated": "2026-04-27T15:40:00Z",
+  "context": {
+    "projects": [],
+    "ideas": [],
+    "knowledge_base": [],
+    "attachments": []
+  },
+  "metadata": {
+    "total_notes": 0,
+    "total_tags": 0,
+    "total_links": 0
+  }
+}</code></pre>
+                    </div>
+
+                    <div class="glass rounded-xl p-6">
+                        <h3 class="font-semibold mb-4">🤖 Instruções para LLMs</h3>
+                        <div class="space-y-3 text-sm text-white/70">
+                            <p>1. <strong>Copie a URL</strong> acima e forneça à sua IA favorita (ChatGPT, Claude, Gemini, etc.)</p>
+                            <p>2. Ou use o formato <code class="bg-white/10 px-1 rounded">@neural-vault</code> em prompts compatíveis</p>
+                            <p>3. A IA receberá contexto estruturado com tags, links e hierarquia de arquivos</p>
+                            <p>4. O contexto é atualizado automaticamente a cada alteração no vault</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Upload Modal -->
+    <div id="uploadModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div class="glass rounded-xl p-6 w-96 max-w-full">
+            <h3 class="font-semibold mb-4">Anexar Arquivos</h3>
+            <div id="dropZone" class="drop-zone rounded-lg p-8 text-center mb-4">
+                <svg class="w-10 h-10 mx-auto mb-2 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                <p class="text-sm text-white/50">Arraste arquivos aqui ou clique para selecionar</p>
+                <p class="text-xs text-white/30 mt-1">Suporta: .md, .json, .zip, .txt, imagens, etc</p>
+            </div>
+            <input type="file" id="fileInput" multiple class="hidden" onchange="app.handleFiles(this.files)">
+            <div class="flex justify-end gap-2">
+                <button onclick="app.closeUpload()" class="px-4 py-2 rounded-lg text-sm hover:bg-white/5 transition">Cancelar</button>
+                <button onclick="document.getElementById('fileInput').click()" class="px-4 py-2 rounded-lg text-sm btn-primary">Selecionar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast fixed bottom-4 right-4 glass rounded-lg px-4 py-3 flex items-center gap-3 z-50">
+        <span id="toastIcon">✅</span>
+        <span id="toastMessage" class="text-sm">Operação realizada com sucesso</span>
+    </div>
+
+    <script>
+        class NeuralVault {
+            constructor() {
+                this.files = JSON.parse(localStorage.getItem('nv_files') || '{}');
+                this.currentFile = null;
+                this.currentPath = '';
+                this.view = 'editor';
+                this.splitView = false;
+                this.unsaved = false;
+
+                if (Object.keys(this.files).length === 0) {
+                    this.seedData();
+                }
+
+                this.init();
+            }
+
+            seedData() {
+                this.files = {
+                    'README.md': {
+                        type: 'file',
+                        content: `# 🧠 Neural Vault
+
+Bem-vindo ao seu **Second Brain**!
+
+## Como usar
+
+- **[[Projetos/Meu Projeto]]** — crie links entre notas
+- Use \`#tag\` para organizar
+- Anexe qualquer tipo de arquivo
+- Exporte contexto para IAs
+
+## Estrutura sugerida
+
+\`\`\`
+📁 Projetos/
+📁 Ideias/
+📁 Conhecimento/
+📁 Anexos/
+\`\`\`
+
+---
+*Sistema inspirado no Obsidian, com superpoderes de IA.*`,
+                        tags: ['#welcome', '#setup'],
+                        created: Date.now(),
+                        modified: Date.now()
+                    },
+                    'Projetos/': { type: 'folder', created: Date.now() },
+                    'Projetos/Meu Projeto.md': {
+                        type: 'file',
+                        content: `# Meu Projeto
+
+## Descrição
+Este é um projeto de exemplo para demonstrar as capacidades do Neural Vault.
+
+## Tarefas
+- [x] Configurar ambiente
+- [ ] Integrar com GitHub
+- [ ] Exportar contexto para IA
+
+## Links úteis
+- [[README]]
+- [[Ideias/Feature Ideas]]
+
+#projeto #ativo`,
+                        tags: ['#projeto', '#ativo'],
+                        created: Date.now(),
+                        modified: Date.now()
+                    },
+                    'Ideas/': { type: 'folder', created: Date.now() },
+                    'Ideas/Feature Ideas.md': {
+                        type: 'file',
+                        content: `# Ideias de Features
+
+## Integrações
+1. **GitHub** — sincronizar repos automaticamente
+2. **Google Drive** — importar documentos
+3. **VS Code** — extensão nativa
+
+## IA
+- Contexto automático para LLMs
+- Geração de resumos
+- Sugestões de links
+
+#ideias #futuro`,
+                        tags: ['#ideias', '#futuro'],
+                        created: Date.now(),
+                        modified: Date.now()
+                    },
+                    'Conhecimento/': { type: 'folder', created: Date.now() },
+                    'Conhecimento/Arquitetura.md': {
+                        type: 'file',
+                        content: `# Arquitetura do Sistema
+
+## Componentes
+\`\`\`json
+{
+  "frontend": "HTML5 + Tailwind + D3.js",
+  "storage": "LocalStorage + IndexedDB",
+  "api": "REST + MCP Protocol"
+}
+\`\`\`
+
+## Fluxo de dados
+1. Usuário edita nota
+2. Sistema extrai tags e links
+3. Graph é atualizado
+4. Contexto para IA é regenerado
+
+#tech #arquitetura`,
+                        tags: ['#tech', '#arquitetura'],
+                        created: Date.now(),
+                        modified: Date.now()
+                    }
+                };
+                this.saveFiles();
+            }
+
+            init() {
+                this.renderFileTree();
+                this.updateStorage();
+                this.setupKeyboard();
+                this.setupDragDrop();
+
+                // Load first file
+                const firstFile = Object.keys(this.files).find(k => this.files[k].type === 'file');
+                if (firstFile) this.openFile(firstFile);
+            }
+
+            saveFiles() {
+                localStorage.setItem('nv_files', JSON.stringify(this.files));
+                this.updateStorage();
+                this.updateMcpPreview();
+            }
+
+            updateStorage() {
+                const data = JSON.stringify(this.files);
+                const size = new Blob([data]).size;
+                const kb = (size / 1024).toFixed(1);
+                document.getElementById('storageText').textContent = `${kb} KB / ∞`;
+                document.getElementById('storageBar').style.width = Math.min((size / 5242880) * 100, 100) + '%';
+            }
+
+            renderFileTree(filter = '') {
+                const tree = document.getElementById('fileTree');
+                tree.innerHTML = '';
+
+                const paths = Object.keys(this.files).sort();
+                const folders = new Set();
+
+                paths.forEach(path => {
+                    if (filter && !path.toLowerCase().includes(filter.toLowerCase())) return;
+
+                    const parts = path.split('/').filter(p => p);
+                    let currentPath = '';
+
+                    parts.forEach((part, i) => {
+                        currentPath += (currentPath ? '/' : '') + part;
+                        const isLast = i === parts.length - 1;
+                        const isFolder = !isLast || this.files[currentPath + '/']?.type === 'folder';
+
+                        if (isFolder) {
+                            folders.add(currentPath + '/');
+                        }
+                    });
+                });
+
+                const renderNode = (path, depth = 0) => {
+                    const item = this.files[path];
+                    if (!item) return;
+
+                    const div = document.createElement('div');
+                    div.className = `file-item flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm ${this.currentFile === path ? 'active' : ''}`;
+                    div.style.paddingLeft = `${12 + depth * 16}px`;
+
+                    const isFolder = item.type === 'folder';
+                    const icon = isFolder 
+                        ? '<svg class="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 24 24"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>'
+                        : '<svg class="w-4 h-4 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>';
+
+                    div.innerHTML = `${icon}<span class="truncate">${path.split('/').pop()}</span>`;
+
+                    if (isFolder) {
+                        div.onclick = () => this.toggleFolder(path);
+                    } else {
+                        div.onclick = () => this.openFile(path);
+                    }
+
+                    tree.appendChild(div);
+
+                    if (isFolder) {
+                        const children = paths.filter(p => p.startsWith(path) && p !== path && p.split('/').length === path.split('/').length + 1);
+                        children.forEach(child => renderNode(child, depth + 1));
+                    }
+                };
+
+                const rootItems = paths.filter(p => !p.includes('/') || p.split('/').length === 1);
+                rootItems.forEach(item => renderNode(item));
+            }
+
+            toggleFolder(path) {
+                // Simple toggle - in a full app, would track expanded state
+                this.renderFileTree();
+            }
+
+            openFile(path) {
+                if (this.unsaved && this.currentFile) {
+                    if (!confirm('Alterações não salvas. Descartar?')) return;
+                }
+
+                this.currentFile = path;
+                this.currentPath = path;
+                const file = this.files[path];
+
+                document.getElementById('editor').value = file.content;
+                document.getElementById('currentPath').textContent = path;
+                document.getElementById('unsavedIndicator').classList.add('hidden');
+                this.unsaved = false;
+
+                this.renderFileTree();
+                if (this.splitView) this.updatePreview();
+            }
+
+            onEditorChange() {
+                this.unsaved = true;
+                document.getElementById('unsavedIndicator').classList.remove('hidden');
+                if (this.splitView) this.updatePreview();
+            }
+
+            saveCurrent() {
+                if (!this.currentFile) return;
+
+                const content = document.getElementById('editor').value;
+                this.files[this.currentFile].content = content;
+                this.files[this.currentFile].modified = Date.now();
+
+                // Extract tags
+                const tags = [...content.matchAll(/#(\w+)/g)].map(m => '#' + m[1]);
+                this.files[this.currentFile].tags = [...new Set(tags)];
+
+                this.saveFiles();
+                this.unsaved = false;
+                document.getElementById('unsavedIndicator').classList.add('hidden');
+                this.showToast('Salvo com sucesso!', '✅');
+            }
+
+            updatePreview() {
+                const content = document.getElementById('editor').value;
+                const html = marked.parse(content);
+                document.getElementById('preview').innerHTML = html;
+                hljs.highlightAll();
+            }
+
+            toggleSplit() {
+                this.splitView = !this.splitView;
+                const preview = document.getElementById('preview');
+                if (this.splitView) {
+                    preview.classList.remove('hidden');
+                    this.updatePreview();
+                } else {
+                    preview.classList.add('hidden');
+                }
+            }
+
+            toggleView(view) {
+                this.view = view;
+                ['editor', 'graph', 'integrations', 'ai-context'].forEach(v => {
+                    document.getElementById(`view-${v}`).classList.add('hidden');
+                    document.getElementById(`btn-${v === 'ai-context' ? 'ai' : v}`).classList.remove('bg-white/10');
+                });
+                document.getElementById(`view-${view}`).classList.remove('hidden');
+                document.getElementById(`btn-${view === 'ai-context' ? 'ai' : view}`).classList.add('bg-white/10');
+
+                if (view === 'graph') this.renderGraph();
+                if (view === 'ai-context') this.updateMcpPreview();
+            }
+
+            renderGraph() {
+                const svg = d3.select('#graphSvg');
+                svg.selectAll('*').remove();
+
+                const width = svg.node().parentElement.clientWidth;
+                const height = svg.node().parentElement.clientHeight;
+                svg.attr('viewBox', [0, 0, width, height]);
+
+                const nodes = [];
+                const links = [];
+                const nodeMap = new Map();
+
+                Object.keys(this.files).forEach((path, i) => {
+                    const file = this.files[path];
+                    if (file.type !== 'file') return;
+
+                    const name = path.split('/').pop().replace('.md', '');
+                    const node = { id: path, name, group: path.includes('/') ? path.split('/')[0] : 'root', r: 8 };
+                    nodes.push(node);
+                    nodeMap.set(path, node);
+
+                    // Extract wiki links
+                    const wikiLinks = [...file.content.matchAll(/\[\[([^\]]+)\]\]/g)].map(m => m[1]);
+                    wikiLinks.forEach(link => {
+                        const targetPath = Object.keys(this.files).find(p => p.includes(link) && this.files[p].type === 'file');
+                        if (targetPath && nodeMap.has(targetPath)) {
+                            links.push({ source: path, target: targetPath });
+                        }
+                    });
+
+                    // Extract tags as nodes
+                    file.tags?.forEach(tag => {
+                        const tagId = 'tag:' + tag;
+                        if (!nodeMap.has(tagId)) {
+                            const tagNode = { id: tagId, name: tag, group: 'tag', r: 5 };
+                            nodes.push(tagNode);
+                            nodeMap.set(tagId, tagNode);
+                        }
+                        links.push({ source: path, target: tagId });
+                    });
+                });
+
+                const simulation = d3.forceSimulation(nodes)
+                    .force('link', d3.forceLink(links).id(d => d.id).distance(100))
+                    .force('charge', d3.forceManyBody().strength(-300))
+                    .force('center', d3.forceCenter(width / 2, height / 2))
+                    .force('collision', d3.forceCollide().radius(d => d.r + 5));
+
+                const link = svg.append('g')
+                    .selectAll('line')
+                    .data(links)
+                    .join('line')
+                    .attr('class', 'link-line');
+
+                const node = svg.append('g')
+                    .selectAll('g')
+                    .data(nodes)
+                    .join('g')
+                    .attr('class', 'node-circle')
+                    .call(d3.drag()
+                        .on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+                        .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+                        .on('end', (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
+
+                node.append('circle')
+                    .attr('r', d => d.r)
+                    .attr('fill', d => d.group === 'tag' ? '#a371f7' : d.group === 'root' ? '#58a6ff' : '#3fb950');
+
+                node.append('text')
+                    .text(d => d.name)
+                    .attr('x', d => d.r + 4)
+                    .attr('y', 4)
+                    .attr('font-size', '11px')
+                    .attr('fill', '#8b949e');
+
+                node.on('click', (e, d) => {
+                    if (d.group !== 'tag') this.openFile(d.id);
+                });
+
+                simulation.on('tick', () => {
+                    link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+                        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+                    node.attr('transform', d => `translate(${d.x},${d.y})`);
+                });
+            }
+
+            createFile() {
+                const name = prompt('Nome do arquivo (ex: Nota.md):');
+                if (!name) return;
+
+                const path = this.currentPath.includes('/') 
+                    ? this.currentPath.substring(0, this.currentPath.lastIndexOf('/') + 1) + name
+                    : name;
+
+                if (this.files[path]) {
+                    this.showToast('Arquivo já existe!', '⚠️');
+                    return;
+                }
+
+                this.files[path] = {
+                    type: 'file',
+                    content: `# ${name.replace('.md', '')}
+
+`,
+                    tags: [],
+                    created: Date.now(),
+                    modified: Date.now()
+                };
+                this.saveFiles();
+                this.renderFileTree();
+                this.openFile(path);
+            }
+
+            createFolder() {
+                const name = prompt('Nome da pasta:');
+                if (!name) return;
+
+                const path = name.endsWith('/') ? name : name + '/';
+                if (this.files[path]) {
+                    this.showToast('Pasta já existe!', '⚠️');
+                    return;
+                }
+
+                this.files[path] = { type: 'folder', created: Date.now() };
+                this.saveFiles();
+                this.renderFileTree();
+            }
+
+            searchFiles(query) {
+                this.renderFileTree(query);
+            }
+
+            setupKeyboard() {
+                document.addEventListener('keydown', (e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                        e.preventDefault();
+                        this.saveCurrent();
+                    }
+                });
+            }
+
+            setupDragDrop() {
+                const dropZone = document.getElementById('dropZone');
+
+                ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                    dropZone.addEventListener(eventName, (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    });
+                });
+
+                ['dragenter', 'dragover'].forEach(eventName => {
+                    dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'));
+                });
+
+                ['dragleave', 'drop'].forEach(eventName => {
+                    dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'));
+                });
+
+                dropZone.addEventListener('drop', (e) => {
+                    this.handleFiles(e.dataTransfer.files);
+                });
+            }
+
+            handleFiles(fileList) {
+                Array.from(fileList).forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const path = file.name;
+
+                        if (file.name.endsWith('.zip')) {
+                            this.processZip(file, path);
+                        } else {
+                            this.files[path] = {
+                                type: 'file',
+                                content: e.target.result,
+                                tags: [],
+                                created: Date.now(),
+                                modified: Date.now(),
+                                mimeType: file.type
+                            };
+                            this.saveFiles();
+                            this.renderFileTree();
+                            this.showToast(`Importado: ${file.name}`, '✅');
+                        }
+                    };
+
+                    if (file.name.endsWith('.zip')) {
+                        this.processZip(file, file.name);
+                    } else {
+                        reader.readAsText(file);
+                    }
+                });
+
+                this.closeUpload();
+            }
+
+            async processZip(file, path) {
+                try {
+                    const zip = await JSZip.loadAsync(file);
+                    const promises = [];
+
+                    zip.forEach((relativePath, zipEntry) => {
+                        if (zipEntry.dir) {
+                            this.files[relativePath] = { type: 'folder', created: Date.now() };
+                        } else {
+                            promises.push(
+                                zipEntry.async('string').then(content => {
+                                    this.files[relativePath] = {
+                                        type: 'file',
+                                        content: content,
+                                        tags: [],
+                                        created: Date.now(),
+                                        modified: Date.now()
+                                    };
+                                })
+                            );
+                        }
+                    });
+
+                    await Promise.all(promises);
+                    this.saveFiles();
+                    this.renderFileTree();
+                    this.showToast('ZIP importado com sucesso!', '✅');
+                } catch (err) {
+                    this.showToast('Erro ao processar ZIP', '❌');
+                }
+            }
+
+            closeUpload() {
+                document.getElementById('uploadModal').classList.add('hidden');
+            }
+
+            showUpload() {
+                document.getElementById('uploadModal').classList.remove('hidden');
+            }
+
+            exportAll() {
+                const data = {
+                    vault: 'Neural Vault',
+                    exported_at: new Date().toISOString(),
+                    files: this.files,
+                    mcp_context: this.generateMcpContext()
+                };
+
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `neural-vault-export-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+
+                this.showToast('Vault exportado!', '✅');
+            }
+
+            generateMcpContext() {
+                const notes = Object.keys(this.files)
+                    .filter(k => this.files[k].type === 'file')
+                    .map(k => ({
+                        path: k,
+                        content: this.files[k].content,
+                        tags: this.files[k].tags || [],
+                        links: [...this.files[k].content.matchAll(/\[\[([^\]]+)\]\]/g)].map(m => m[1])
+                    }));
+
+                const allTags = [...new Set(notes.flatMap(n => n.tags))];
+                const allLinks = [...new Set(notes.flatMap(n => n.links))];
+
+                return {
+                    schema_version: '1.0',
+                    vault_name: 'Neural Vault',
+                    last_updated: new Date().toISOString(),
+                    context: {
+                        projects: notes.filter(n => n.tags.includes('#projeto')),
+                        ideas: notes.filter(n => n.tags.includes('#ideias')),
+                        knowledge_base: notes.filter(n => n.tags.includes('#tech') || n.tags.includes('#arquitetura')),
+                        all_notes: notes
+                    },
+                    metadata: {
+                        total_notes: notes.length,
+                        total_tags: allTags.length,
+                        total_links: allLinks.length,
+                        tags: allTags,
+                        graph_density: allLinks.length / Math.max(notes.length, 1)
+                    }
+                };
+            }
+
+            updateMcpPreview() {
+                const ctx = this.generateMcpContext();
+                document.getElementById('mcpPreview').textContent = JSON.stringify(ctx, null, 2);
+            }
+
+            regenerateContext() {
+                this.updateMcpPreview();
+                this.showToast('Contexto regenerado!', '✅');
+            }
+
+            copyUrl() {
+                const input = document.getElementById('publicUrl');
+                input.select();
+                document.execCommand('copy');
+                this.showToast('URL copiada!', '✅');
+            }
+
+            connectGitHub() {
+                this.showToast('Configure seu token GitHub em Integrações > API', '🔧');
+            }
+
+            connectDrive() {
+                this.showToast('Autenticação OAuth necessária. Veja documentação.', '🔧');
+            }
+
+            connectVSCode() {
+                this.showToast('Instale a extensão "Neural Vault" no marketplace.', '🔧');
+            }
+
+            showApiConfig() {
+                this.showToast('API Key: nv_live_xxxxxxxx (simulado)', '🔑');
+            }
+
+            showToast(message, icon = '✅') {
+                const toast = document.getElementById('toast');
+                document.getElementById('toastMessage').textContent = message;
+                document.getElementById('toastIcon').textContent = icon;
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 3000);
+            }
+        }
+
+        const app = new NeuralVault();
+    </script>
+</body>
+</html>
